@@ -1,7 +1,5 @@
 # Dex-EquiTact
 
-English | [简体中文](README.zh-CN.md)
-
 Official PyTorch implementation of Dex-EquiTact for reactive dexterous
 manipulation using vision, proprioception and three-axis fingertip forces.
 It includes a typed equivariant tactile encoder, causal diffusion policy,
@@ -27,26 +25,6 @@ inference.
   latent states from the shared FiLM representation. A force-only EMA encoder
   provides detached targets and updates after each optimizer step. The predictor
   and teacher are used only during training; neither requires action input.
-
-```mermaid
-flowchart LR
-    S[Two RGB / proprio observations] --> C[Cached slow tokens]
-    P[Wrist-frame positions] --> T[Separate causal VN streams]
-    F[Sensor-local forces] --> T
-    T --> V[Typed five-finger state]
-    C --> M[Scalar FiLM]
-    V --> M
-    C --> A[Causal epsilon denoiser]
-    M --> A
-    A --> D[DDIM with cached noise]
-    D --> N[Newest action]
-    A -. training only .-> AL[Action noise loss]
-    X[Injected noise] -. target .-> AL
-    M -. training only .-> H[Future-force predictor]
-    Q[Recorded current + future forces] -. training only .-> E[Force EMA teacher]
-    H -.-> L[Latent loss]
-    E -. detached targets .-> L
-```
 
 See the [method guide](docs/METHOD.md) for the formulation and
 [architecture guide](docs/ARCHITECTURE.md) for modules, tensor shapes and the
