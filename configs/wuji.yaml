@@ -1,0 +1,20 @@
+# Paper: 6 arm increments + 20 hand targets; Ho=2, Ha=16, D=8.
+# All network/optimizer/diffusion settings are implementation defaults.
+action_dim: 26
+proprio_dim: 26
+num_views: 2
+observation_horizon: 2
+action_horizon: 16
+prediction_horizon: 8
+vector_channels: 32
+vector_layers: 2
+vector_heads: 4
+model_dim: 128
+action_layers: 2
+action_heads: 4
+train_diffusion_steps: 1000
+inference_steps: 10
+beta_start: 0.0001
+beta_end: 0.02
+prediction_weight: 1.0
+ema_decay: 0.99
