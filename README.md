@@ -8,6 +8,8 @@ inference.
 
 ## Method overview
 
+![SO(3)-equivariant encoding of fingertip contact forces into directional latent representations](docs/assets/so3-equivariant-force.jpg)
+
 - **Typed tactile state.** Separate causal vector-neuron streams encode wrist-frame
   fingertip positions and calibrated sensor-local forces under independent SO(3)
   rotations. The state retains both vector types and all five fingers in the order
