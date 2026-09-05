@@ -1,8 +1,6 @@
 # Recorded episode format
 
-The data loader accepts a local `manifest.json` and explicitly listed NPZ episode files. Each episode contains synchronized arrays on one fast observation/action grid. It does not discover arbitrary files, use pickle, call hardware, compute FK, infer missing calibration, convert actions, or invent fingertip positions.
-
-The repository's smoke data are deterministic **synthetic test fixtures**. Passing these checks demonstrates software behavior; it is not evidence of real-data calibration, policy quality, robot control performance, or a particular physical sampling rate.
+Prepare your recorded demonstrations as a local `manifest.json` and explicitly listed NPZ episode files. Each episode contains synchronized arrays on one fast observation/action grid. The data producer supplies calibrated forces, physical fingertip positions, aligned timestamps, and actions in the declared convention. The loader validates this format and constructs training windows.
 
 ## Manifest
 
@@ -25,8 +23,8 @@ The repository's smoke data are deterministic **synthetic test fixtures**. Passi
     "arm_rotation_representation": "rotation_vector",
     "arm_rotation_composition": "left_multiply",
     "hand_command_unit": "rad",
-    "position_source": "recorded_stream_and_calibration_identifier",
-    "force_calibration_id": "actual_calibration_identifier"
+    "position_source": "wrist_frame_fingertip_tracking",
+    "force_calibration_id": "fingertip_force_calibration_v1"
   },
   "episodes": [
     {"id": "episode_000", "file": "episodes/episode_000.npz"},
@@ -35,9 +33,9 @@ The repository's smoke data are deterministic **synthetic test fixtures**. Passi
 }
 ```
 
-The example values for arm frames, rotation representation/composition, hand units, and provenance must be replaced with the actual recording convention. Those six fields are mandatory nonempty strings. They are declarations from the data producer; their presence does **not** prove that calibration or conversion was performed. Synthetic fixtures use `base`, `rotation_vector`, `left_multiply`, `rad`, `synthetic`, `synthetic` respectively and must remain clearly labeled as synthetic.
+The JSON illustrates the schema. Set the arm frame, rotation representation/composition, hand units, position source, and force calibration identifier to the conventions used by your recordings. Those six fields are mandatory nonempty strings. Calibration and coordinate conversion are performed by the data producer before loading; metadata records the resulting convention.
 
-The fixed physical fields above are checked exactly. Input forces are the already calibrated numerical vectors specified by `sensor_local` / `common_calibrated`; `common_calibrated` declares consistent calibrated axis conventions across the five sensors, not that the loader has transformed them into wrist coordinates. Positions are recorded or independently validated physical fingertip locations in wrist coordinates, in meters. Do not substitute sensor-grid coordinates, a generic hand template, zeros for unavailable geometry, or random values. The code can verify shape and finiteness, but cannot distinguish a fabricated finite tensor from a truthful recording. Numerical coordinate and unit conversion belongs in a separately validated producer with recorded provenance.
+The fixed physical fields above are checked exactly. Input forces must already be calibrated numerical vectors in `sensor_local` coordinates. `common_calibrated` declares consistent local-axis conventions across the five sensors; forces retain their local coordinates. Positions must be measured or computed from validated fingertip kinematics in wrist coordinates, in meters. The `position_source` field identifies that source, and `force_calibration_id` identifies the applied calibration. All five physical positions and forces are required in the declared order. The loader checks array shape, finiteness, and declarations; physical calibration and kinematic validation remain part of data preparation.
 
 Episode IDs and resolved file paths must both be unique. Files must exist inside the dataset directory; absolute paths and paths escaping through `..` or symlinks are rejected. Additional provenance metadata can be stored alongside the required fields.
 
@@ -57,13 +55,13 @@ Each `.npz` has these seven required named arrays. Save with `numpy.savez`; load
 
 `N` is the episode length, `V=num_cameras`, `P=proprio_dim`, and `A=action_dim`. Every array must match these declared dimensions exactly. Actions are never truncated or padded. The 26D layout has 20 hand targets; the 28D layout has 22. The six arm values contain three translation increments and a declared three-value rotation increment representation. Translation frame, rotation representation and multiplication order, and hand target units must match the actual producer. The loader treats these values numerically and does not implement a robot controller.
 
-Legacy absolute TCP commands are not accepted merely because their shape is 26 or 28. An upstream conversion needs the actual current pose, command timing, pose convention, and frame/composition definitions, and must produce truthful `arm_delta_hand_target` data. Renaming the metadata does not perform this conversion.
+If the recorded arm commands are absolute TCP poses, convert them upstream into the required increments using the actual current pose, command timing, pose convention, and frame/composition definitions. Validate that conversion before declaring `arm_delta_hand_target`; the loader does not convert action semantics.
 
-Camera images may be repeated on the fast grid using the latest image already available at each timestamp. Each camera's source timestamps must be nondecreasing and cannot exceed the corresponding fast-grid timestamp. Record the actual repeated image's source time; do not replace it with the grid time. This check prevents later camera frames from entering a frozen slow context. Delays between exposure and availability require the producer to align against actual availability; exposure timestamps alone cannot prove a frame had arrived in a deployed system.
+Camera images may be repeated on the fast grid using the latest image already available at each timestamp. Each camera's source timestamps must be nondecreasing and cannot exceed the corresponding fast-grid timestamp. Preserve the repeated image's source timestamp when holding a frame on the grid. The producer must account for exposure-to-availability delay when aligning observations, so each slow context contains only frames available at its anchor. At every fast step, tactile observations must precede the corresponding action decision.
 
-The loader converts uint8 RGB to float32 `[0,1]`, leaves valid floating RGB in that range, and returns all model inputs as CPU float32 tensors. Images are not standardized by the data normalizer. The model owns its visual preprocessing.
+The loader converts uint8 RGB to float32 `[0,1]`, leaves valid floating RGB in that range, and returns all model inputs as CPU float32 tensors. Images are not standardized by the data normalizer. Prepare a consistent camera resolution before saving episodes; the loader applies no resize or augmentation, and the visual encoder requires `H,W >= 8`.
 
-NPZ decoding is episode-granular, not random-access video decoding. Initialization validates one episode at a time. Sampling caches one full decoded episode per DataLoader worker, so memory and decoding cost scale with episode size and worker count. Large recordings should be divided into genuine acquisition episodes without leaking related demonstrations across splits. A future indexed storage adapter can improve image access without changing this contract.
+NPZ decoding is episode-granular. Initialization validates one episode at a time. Sampling caches one full decoded episode per DataLoader worker, so memory and decoding cost scale with episode size and worker count. Preserve acquisition episode boundaries and keep related demonstrations together when defining a session- or object-level split.
 
 ## Exact temporal indices
 
@@ -79,7 +77,7 @@ For anchor index `s`, a sample contains:
 | `actions` | `s` through `s+15` | `[16,A]` |
 | `future_forces` | `s+16` through `s+23` | `[8,5,3]` |
 
-With arbitrary positive horizons, the earliest anchor is `(observation_horizon-1)*slow_stride`; the latest is `N-action_horizon-prediction_horizon`. Anchors advance by `sample_stride`. The slow history ends at `s` and is fixed for that fast block. Future force is a training target, not policy observation. The model/trainer must keep `future_forces` out of inference conditioning. No future images or future proprioception are returned.
+The dataset supports positive horizon arguments: the earliest anchor is `(observation_horizon-1)*slow_stride` and the latest is `N-action_horizon-prediction_horizon`. Anchors advance by `sample_stride`. `PolicyConfig` requires horizons `2/16/8`. The slow history ends at `s` and is fixed for that fast block. `future_forces` supplies the force EMA teacher during training; online conditioning uses only the 16 current tactile frames. The sample includes no future images or proprioception.
 
 Only full valid windows are emitted. No boundary frames are repeated, no target masks are needed, and no sample crosses an episode boundary. Default sampling therefore needs at least 40 frames per episode. Short episodes emit no windows; constructing a dataset with no usable window raises an error.
 
@@ -95,7 +93,7 @@ train = EpisodeDataset("/path/to/dataset", train_ids, normalizer=normalizer)
 val = EpisodeDataset("/path/to/dataset", val_ids, normalizer=normalizer)
 ```
 
-The split is deterministic and disjoint by explicit episode ID. A positive validation fraction leaves at least one episode in each set when two or more episodes exist. One episode or `val_fraction=0` returns train-only IDs and an empty validation list; do not construct a validation dataset from an empty list. Related demonstrations of the same object/session may require a stronger manually supplied split than random episode separation.
+The split is deterministic and disjoint by explicit episode ID. A positive validation fraction leaves at least one episode in each set when two or more episodes exist. One episode or `val_fraction=0` returns train-only IDs and an empty validation list; construct a validation dataset only when validation IDs are present. The trainer requires separate training and validation episodes with complete windows. For session- or object-level evaluation, supply corresponding disjoint episode groups through the dataset API.
 
 Statistics are fitted only over all frames in the given training episodes. Held-out episode values cannot influence them. Action and proprioception use per-component population mean and standard deviation; near-constant components use denominator 1. Force and position each use one fixed positive scalar, the reciprocal of the maximum training vector norm (with a small positive floor), and zero spatial offset. Scaling is shared across fingers, time, and xyz. These fixed vector maps commute with rotation; vector norms also keep fitted scales independent of the choice of spatial axes. Position and force scales may differ because their units differ.
 
@@ -113,17 +111,15 @@ Normalization methods require floating NumPy arrays or Torch tensors and reject 
 
 ## Existing Zarr recordings
 
-The training data layer does not depend on Zarr or load the old `ImplicitRDP` package. The optional `scripts/convert_zarr.py` entry point reads an existing replay group with `data/*` and exclusive `meta/episode_ends`, preserves every episode boundary, and writes a new canonical directory. It refuses existing output directories and publishes output only after validating all episodes in a temporary directory.
+The optional [scripts/convert_zarr.py](../scripts/convert_zarr.py) entry point reads a replay group with `data/*` and exclusive `meta/episode_ends`, preserves every episode boundary, and writes a canonical dataset directory. It rejects existing output directories and publishes output only after validating every episode. The core training data layer uses NumPy and does not require Zarr.
 
 ```bash
 PYTHONPATH=src python scripts/convert_zarr.py \
   --source /path/to/replay_buffer.zarr \
   --output /path/to/new_canonical_dataset \
-  --metadata /path/to/truthful_metadata.json
+  --metadata /path/to/metadata.json
 ```
 
 The metadata file contains the `metadata` object itself, without the outer manifest. The CLI requires optional `zarr>=2.16,<3`; `--help` and the training core do not import Zarr. Defaults read `oak_rgb` and `realsense_rgb` as `[N,H,W,3]`, concatenate `tcp_state` and `q_state`, and copy `tactile_pos`, `tactile`, `action`, `timestamp`, and `image_timestamps`. CLI options can explicitly map each of those fields. An already confirmed flat force layout `[N,15]` is reshaped to `[N,5,3]` under the required finger-order declaration.
 
-This converter copies numerical values and performs no calibration or absolute-to-increment action conversion. It accepts only metadata declaring the already-canonical action convention, with corresponding real input values. Missing `timestamp`, camera source timestamps, positions, or unknown action conventions are acquisition gaps, not fields to fabricate. The legacy repository's converter did not save timestamps and its commands were documented as absolute targets; such files cannot be made valid just by running this command or changing a label. Recover the measured source signals and implement a separately validated semantic conversion first.
-
-The conversion core is tested with small NumPy-backed replay groups, including missing-signal rejection and output protection. The environment used for implementation did not contain Zarr or a real policy replay, so an actual Zarr file conversion and physical data validation remain unverified.
+The converter copies numerical values without calibration or absolute-to-increment action conversion. Inputs must already satisfy the declared units, frames, finger order, timestamps, and `arm_delta_hand_target` convention. Required source fields must exist, every source array must match the final exclusive episode boundary, and every converted episode passes the canonical schema checks before output is written.

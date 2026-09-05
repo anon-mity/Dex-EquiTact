@@ -1,8 +1,8 @@
 """Strict recorded-episode input and train-only normalization.
 
-This module performs no FK, calibration, action conversion or hardware access.
-Metadata declares provenance; it cannot establish that a physical calibration
-was actually performed. See docs/DATA_FORMAT.md for the acquisition contract.
+Episodes contain synchronized observations and actions in the declared
+coordinate frames and units. Calibration and action conversion are performed
+during data preparation. See docs/DATA_FORMAT.md for the acquisition format.
 """
 from __future__ import annotations
 

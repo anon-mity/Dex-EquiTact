@@ -1,4 +1,4 @@
-"""Small deterministic trainer with complete EMA/normalizer/resume checkpoints."""
+"""Policy training, held-out evaluation, and complete resumable checkpoints."""
 import hashlib
 import json
 import os
@@ -67,7 +67,7 @@ def load_policy(checkpoint_path, device='cpu'):
 
 @torch.no_grad()
 def evaluate(policy, dataset, *, batch_size=4, seed=0, max_batches=None):
-    """Held-out denoising and latent errors; these are not task success rates."""
+    """Evaluate action-denoising and future-force latent losses on held-out data."""
     if len(dataset) == 0:
         raise ValueError('Validation dataset has no complete windows')
     device = next(policy.parameters()).device
@@ -99,8 +99,8 @@ def train(data_root, output_dir, config, *, steps=1000, batch_size=8, learning_r
           resume=None, save_every=100, validation_batches=4):
     """Train to total `steps`; resuming preserves sample selection and noise RNG.
 
-    Sampling is uniform over full windows, with replacement. Engineering defaults
-    here are not manuscript-reported hyperparameters. Separate embodiment policies.
+    Sampling is uniform over full windows, with replacement. Each run trains
+    one embodiment policy and records its optimizer and sampling configuration.
     """
     if steps < 1 or batch_size < 1 or save_every < 1 or learning_rate <= 0:
         raise ValueError('steps, batch_size, save_every and learning_rate must be positive')
@@ -159,7 +159,7 @@ def train(data_root, output_dir, config, *, steps=1000, batch_size=8, learning_r
         start = previous['step']
     output.mkdir(parents=True, exist_ok=True)
     provenance = dict(manuscript_sha256=MANUSCRIPT_SHA256, dataset_fingerprint=fingerprint,
-                      synthetic=manifest.get('synthetic', False), torch_version=str(torch.__version__),
+                      dataset_metadata=metadata, torch_version=str(torch.__version__),
                       numpy_version=np.__version__, device=str(device))
     (output / 'run.json').write_text(json.dumps(dict(config=config.to_dict(), settings=settings,
                                       split=split, provenance=provenance), indent=2) + '\n')

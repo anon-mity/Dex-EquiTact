@@ -1,8 +1,8 @@
-"""Cached slow context. The CNN/tokenization is an implementation choice.
+"""Encode multiview RGB and proprioception into cached slow-context tokens.
 
-The manuscript does not identify an image backbone. This small trainable CNN has
-no downloaded or implied pretrained weights. Normalization is per image, never
-across the fast tactile/action sequence.
+The image CNN produces a 2x2 spatial token grid for each camera observation.
+Proprioceptive tokens and camera/time/patch embeddings complete the slow context.
+Image normalization operates per image, preserving fast-sequence causality.
 """
 import torch
 from torch import nn

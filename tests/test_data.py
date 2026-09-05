@@ -1,4 +1,4 @@
-"""Deterministic test fixtures exercise the contract, not real robot data."""
+"""Tests for episode validation, indexing, and training-set normalization."""
 import importlib
 import importlib.util
 import json
@@ -17,33 +17,34 @@ def api():
         detail = str(exc)
         class MissingPipeline:
             def __getattr__(self, name):
-                pytest.fail(f"Strict data pipeline is not implemented: {detail}")
+                pytest.fail(f"Cannot load the data pipeline: {detail}")
         return MissingPipeline()
 
 
-def make_root(tmp_path, action_dim=26, n_frames=42, n_episodes=2):
+def make_root(tmp_path, action_dim=26, n_frames=42, n_episodes=2,
+              proprio_dim=7, image_size=4):
     metadata = {
         "finger_order": ["thumb", "index", "middle", "ring", "little"],
         "position_frame": "wrist", "position_unit": "m",
         "force_frame": "sensor_local", "force_unit": "N",
         "force_axes": "common_calibrated",
         "action_convention": "arm_delta_hand_target",
-        "action_dim": action_dim, "proprio_dim": 7, "num_cameras": 2,
+        "action_dim": action_dim, "proprio_dim": proprio_dim, "num_cameras": 2,
         "timestamp_unit": "s",
         "arm_translation_frame": "base",
         "arm_rotation_representation": "rotation_vector",
         "arm_rotation_composition": "left_multiply",
         "hand_command_unit": "rad",
-        "position_source": "synthetic",
-        "force_calibration_id": "synthetic",
+        "position_source": "pytest_fixture",
+        "force_calibration_id": "pytest_fixture",
     }
     episodes = []
     for episode in range(n_episodes):
         t = np.arange(n_frames, dtype=np.float32)
         arrays = {
             "images": np.broadcast_to(t[:, None, None, None, None].astype(np.uint8),
-                                      (n_frames, 2, 3, 4, 4)).copy(),
-            "proprio": np.broadcast_to(t[:, None] + episode * 1000, (n_frames, 7)).copy(),
+                                      (n_frames, 2, 3, image_size, image_size)).copy(),
+            "proprio": np.broadcast_to(t[:, None] + episode * 1000, (n_frames, proprio_dim)).copy(),
             "positions": np.broadcast_to((t / 100)[:, None, None], (n_frames, 5, 3)).copy(),
             "forces": np.broadcast_to((t + episode * 1000)[:, None, None], (n_frames, 5, 3)).copy(),
             "actions": np.broadcast_to((t + episode * 1000)[:, None], (n_frames, action_dim)).copy(),
@@ -106,7 +107,7 @@ def test_physical_semantics_must_be_explicit(api, tmp_path, key, value):
         api.read_manifest(tmp_path)
 
 
-def test_missing_geometry_rejected_without_placeholder(api, tmp_path):
+def test_missing_fingertip_positions_rejected(api, tmp_path):
     make_root(tmp_path)
     with np.load(tmp_path / "episode_0.npz") as source:
         arrays = {k: source[k] for k in source.files if k != "positions"}
@@ -229,7 +230,7 @@ def test_normalizer_rejects_integer_inputs_instead_of_truncating_statistics(api,
 def load_converter():
     path = Path(__file__).parents[1] / "scripts" / "convert_zarr.py"
     if not path.exists():
-        pytest.fail("Strict Zarr conversion entry point is not implemented")
+        pytest.fail("Cannot locate the Zarr conversion entry point")
     spec = importlib.util.spec_from_file_location("convert_zarr", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -2,9 +2,9 @@
 
 Vector type 0 is wrist-frame position; type 1 is local-sensor force. The two
 streams transform under independent SO(3) actions. Scalar FiLM gains are shared
-across the type and XYZ axes as in the paper. The predictor's position-norm
-gating and channel projection are explicit implementation choices where the
-paper leaves the internal head architecture unspecified.
+across the type and XYZ axes. The future-force predictor uses position-norm
+scalar gates and force-vector channel projections to preserve the force-type
+rotation law while conditioning on both parts of the shared tactile state.
 """
 
 from __future__ import annotations

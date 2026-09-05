@@ -1,1 +1,1 @@
-"""Independent geometry, context, and action modules."""
+"""Equivariant tactile encoding, visual conditioning, and action diffusion."""

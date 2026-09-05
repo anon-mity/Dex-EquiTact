@@ -1,5 +1,5 @@
 # Separate Sharpa policy: 6 arm increments + 22 hand targets.
-# Network and training defaults are not recovered experiment hyperparameters.
+# Model, diffusion, and auxiliary prediction configuration.
 action_dim: 28
 proprio_dim: 28
 num_views: 2

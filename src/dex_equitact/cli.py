@@ -1,15 +1,11 @@
-"""Training, held-out loss evaluation, data validation, and synthetic smoke CLI."""
+"""Train and evaluate Dex-EquiTact policies using recorded demonstrations."""
 import argparse
 import json
-from pathlib import Path
 
 import torch
-from torch.utils.data import default_collate
 
 from .config import PolicyConfig
 from .data import EpisodeDataset, read_manifest
-from .streaming import ReactiveController
-from .synthetic import create_synthetic_dataset
 from .training import dataset_fingerprint, evaluate, load_policy, train
 
 
@@ -40,10 +36,6 @@ def main(argv=None):
     ev.add_argument('--checkpoint', required=True)
     ev.add_argument('--batch-size', type=int, default=4)
     ev.add_argument('--device', default='cpu')
-    smoke = sub.add_parser('smoke', help='Generate SYNTHETIC data and test train/checkpoint/streaming')
-    smoke.add_argument('--output', required=True, help='New directory, never overwritten')
-    smoke.add_argument('--action-dim', type=int, choices=(26, 28), default=26)
-    smoke.add_argument('--steps', type=int, default=2)
     args = parser.parse_args(argv)
     if args.threads < 1:
         parser.error('--threads must be positive')
@@ -54,9 +46,8 @@ def main(argv=None):
                             slow_stride=args.slow_stride)
         result = {'episodes': len(manifest['episodes']), 'windows': len(ds),
                   'action_dim': manifest['metadata']['action_dim'],
-                  'synthetic': manifest.get('synthetic', False),
                   'sample_shapes': {key: list(value.shape) for key, value in ds[0].items()},
-                  'validation_scope': 'Recorded schema and timestamps; physical calibration is declared by the recorder.'}
+                  'validation_scope': 'Episode schema, numerical values, metadata, timestamps, and complete windows.'}
     elif args.command == 'train':
         config = PolicyConfig.from_yaml(args.config)
         path = train(args.data, args.output, config, steps=args.steps, batch_size=args.batch_size,
@@ -71,31 +62,7 @@ def main(argv=None):
         ds = EpisodeDataset(args.data, state['split']['val'], normalizer,
                             slow_stride=state['settings']['slow_stride'])
         result = {'heldout_losses': evaluate(policy, ds, batch_size=args.batch_size),
-                  'windows': len(ds), 'synthetic': state['provenance']['synthetic']}
-    else:
-        root = Path(args.output)
-        if root.exists() and any(root.iterdir()):
-            raise FileExistsError(f'Smoke output must be new or empty: {root}')
-        data = create_synthetic_dataset(root / 'synthetic_data', action_dim=args.action_dim)
-        config = PolicyConfig(action_dim=args.action_dim, proprio_dim=args.action_dim,
-            vector_channels=8, vector_layers=1, vector_heads=2, model_dim=32,
-            action_layers=1, action_heads=2, train_diffusion_steps=12, inference_steps=3)
-        checkpoint = train(data, root / 'training', config, steps=args.steps, batch_size=1)
-        policy, normalizer, state = load_policy(checkpoint)
-        raw = EpisodeDataset(data, state['split']['val'])
-        batch = default_collate([raw[0]])
-        controller = ReactiveController(policy, normalizer)
-        controller.start_cycle(batch['images'], batch['proprio'], timestamp=0.0)
-        actions = []
-        for j in range(config.action_horizon):
-            actions.append(controller.step(batch['positions'][:, j], batch['forces'][:, j],
-                                           timestamp=j * 0.02))
-        result = {'synthetic_only': True, 'optimizer_steps': args.steps,
-                  'checkpoint': str(checkpoint), 'streamed_action_shape': list(torch.stack(actions, dim=1).shape),
-                  'finite_streamed_actions': bool(torch.isfinite(torch.stack(actions)).all()),
-                  'parameters_online': sum(p.numel() for p in policy.trainable_parameters()),
-                  'robot_success_rate': 'not measured'}
-        (root / 'smoke_result.json').write_text(json.dumps(result, indent=2) + '\n')
+                  'windows': len(ds)}
     print(json.dumps(result, indent=2))
 
 

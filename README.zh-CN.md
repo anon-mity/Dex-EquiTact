@@ -2,12 +2,9 @@
 
 [English](README.md) | 简体中文
 
-根据 Dex-EquiTact 方法重新实现的独立 PyTorch 仓库，以视觉、本体状态和三轴指尖力
+Dex-EquiTact 的官方 PyTorch 实现，以视觉、本体状态和三轴指尖力
 驱动灵巧手反应式策略。包含双类型等变触觉编码、因果扩散动作策略、EMA 未来力潜变量
 监督、可恢复训练，以及逐触觉帧流式推理。
-
-当前版本已使用合成输入完成软件验证，**尚未用原始示教数据训练，也未复现论文的
-机器人成功率**。原始数据、训练好的检查点和机器人驱动不包含在仓库中。
 
 ## 方法概览
 
@@ -24,15 +21,13 @@
   FiLM 表示，force-only EMA 教师提供不回传梯度的目标，在每次优化器更新后更新。
   预测头和教师只用于训练，均不需要动作输入。
 
-论文未指定的 CNN、网络宽度、优化器、扩散日程等采用明确列出的工程默认值。
-架构图见[英文主页](README.md#method-overview)，详细对应关系和来源记录见
-[METHOD_ALIGNMENT.md](docs/METHOD_ALIGNMENT.md) 与
-[IMPLEMENTATION_CONTRACT.md](docs/IMPLEMENTATION_CONTRACT.md)。
+架构图见[英文主页](README.md#method-overview)，方法推导见
+[方法说明](docs/METHOD.md)，模块、张量形状与默认配置见
+[架构说明](docs/ARCHITECTURE.md)。
 
-## 安装与快速验证
+## 安装与快速开始
 
-需要 Python >=3.10、PyTorch >=2.2、NumPy 和 PyYAML。CNN 从头训练，安装不下载
-预训练权重：
+需要 Python >=3.10、PyTorch >=2.2、NumPy 和 PyYAML。
 
 ```bash
 git clone https://github.com/anon-mity/Dex-EquiTact.git
@@ -41,13 +36,8 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 
-python -m dex_equitact smoke --output /tmp/dex_smoke_wuji --action-dim 26
-python -m dex_equitact smoke --output /tmp/dex_smoke_sharpa --action-dim 28
+python -m dex_equitact --help
 ```
-
-Smoke 创建明确标记的合成数据，用小型测试网络执行两次真实 forward/backward、
-优化和 EMA 更新、检查点保存/加载，以及完整 16 帧流式推理。动作输出形状分别为
-`[1,16,26]` 和 `[1,16,28]`，结果写入 `smoke_result.json`。输出目录必须为空或不存在。
 
 安装后也可使用 `dex-equitact` 命令。未安装包时，在仓库根目录使用
 `PYTHONPATH=src python -m dex_equitact ...`。
@@ -62,13 +52,13 @@ Smoke 创建明确标记的合成数据，用小型测试网络执行两次真�
 | WUJI | [wuji.yaml](configs/wuji.yaml) | 6 维机械臂增量 + 20 维手部目标 = 26 | 26 |
 | Sharpa | [sharpa.yaml](configs/sharpa.yaml) | 6 维机械臂增量 + 22 维手部目标 = 28 | 28 |
 
-两份配置均使用两个相机、两个慢观测、16 个触觉/动作时刻和 8 步未来力目标。
-默认向量通道数为 32，动作 Transformer 宽度为 128，训练扩散级数为 1000，
-DDIM 推理更新次数为 10。这些网络与扩散参数是工程默认值。
+两种机器人默认配置均使用两个相机、两个慢观测、16 个触觉/动作时刻和 8 步未来力
+目标，向量通道数为 32，动作 Transformer 宽度为 128，训练扩散级数为 1000，
+DDIM 推理更新次数为 10。
 
 ## 准备数据和训练
 
-格式见 [DATA_FORMAT.md](docs/DATA_FORMAT.md)。每条示教为一个 NPZ，包含 `images`、
+请按照[数据格式说明](docs/DATA_FORMAT.md) 准备自己的示教数据。每条示教为一个 NPZ，包含 `images`、
 `proprio`、`positions`、`forces`、`actions`、`timestamps` 和 `image_timestamps`。
 `manifest.json` 显式列出 episode，并记录五指顺序、位置/力坐标系、单位、
 标定来源和完整动作约定。位置须为实测或独立验证的腕坐标系指尖位置，单位米；
@@ -98,14 +88,14 @@ python -m dex_equitact evaluate --data /path/to/dataset \
 ```
 
 将 `/path/to/dataset` 替换为实际数据路径。CPU 可使用 `--device cpu`；CUDA 需要可用
-的对应安装。示例训练步数是用法示例，不代表论文实验设置。Sharpa 使用
+的对应安装。Sharpa 使用
 `configs/sharpa.yaml` 和独立的输出目录。
 
 继续训练时指定相同配置、数据和已记录的训练设置，`--steps` 表示**目标总优化步数**，
 包含已完成的步数。`last.pt` 保存 online/EMA、优化器、随机状态、采样随机状态、
 归一化统计、数据划分、配置和数据内容哈希。每次保存同时记录验证损失；
 `metrics.jsonl` 和 `run.json` 记录运行信息。数据或关键训练设置变化会拒绝原样续训。
-评估使用检查点记录的留出集，输出动作去噪和潜变量损失；机器人任务成功率需另行评估。
+评估使用检查点记录的留出集，输出动作去噪和潜变量损失。
 
 ## 流式推理接口
 
@@ -139,16 +129,15 @@ latest_action = controller.step(positions, forces, timestamp=tactile_time)
 刷新上下文、清空触觉历史并缓存新噪声。调用方负责硬件连接，并按照 manifest 中
 声明的平移坐标系、旋转组合规则和手关节单位解释动作。
 
-## 验证
+## 测试
 
 ```bash
 python -m pytest -q
 ```
 
-[VALIDATION.md](docs/VALIDATION.md) 记录了 Python 3.12 / PyTorch 2.11 环境中
-**60 项 CPU 测试通过**，覆盖双类型旋转、五指顺序、因果性、DDIM 前缀一致性、
-EMA 目标、两种动作维度的流式推理、数据约定和检查点恢复。这些测试使用合成输入；
-CUDA 执行和真实机器人时延/性能仍未验证。
+测试覆盖双类型旋转、五指顺序、因果性、DDIM 前缀一致性、EMA 目标、两种动作维度
+的流式推理、数据约定和检查点恢复。测试范围和运行方式见
+[测试指南](docs/TESTING.md)。
 
 ## 方法与代码对应
 

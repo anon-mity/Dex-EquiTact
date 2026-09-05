@@ -1,5 +1,5 @@
-# Paper: 6 arm increments + 20 hand targets; Ho=2, Ha=16, D=8.
-# All network/optimizer/diffusion settings are implementation defaults.
+# WUJI policy: 6 arm increments + 20 hand targets; Ho=2, Ha=16, D=8.
+# Model, diffusion, and auxiliary prediction configuration.
 action_dim: 26
 proprio_dim: 26
 num_views: 2

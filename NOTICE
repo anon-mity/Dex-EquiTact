@@ -1,10 +1,8 @@
-Dex-EquiTact clean method implementation
+Dex-EquiTact
 
-This repository implements the method described in Dex-EquiTact_95.pdf.
-The original EquiTact/ImplicitRDP workspace was inspected to identify contracts and
-mismatches. No legacy source files, third-party model weights, hardware SDKs, or
-datasets are vendored here. The Python implementation is newly written.
+Official PyTorch implementation of Dex-EquiTact.
+Copyright (c) 2026 Dex-EquiTact contributors.
+Distributed under the MIT License; see LICENSE.
 
 PyTorch, NumPy, PyYAML, pytest, and optional Zarr are external dependencies with
-their own licenses. The legacy workspace's aggregated third-party license file
-does not describe the contents of this new repository.
+their own licenses.

@@ -1,4 +1,4 @@
-"""Paper constants and explicitly configurable engineering defaults."""
+"""Model configuration and embodiment profiles for Dex-EquiTact."""
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -28,9 +28,9 @@ class PolicyConfig:
 
     def __post_init__(self):
         if self.action_dim not in (26, 28):
-            raise ValueError('Paper embodiments require action_dim 26 (WUJI) or 28 (Sharpa).')
+            raise ValueError('Supported embodiments require action_dim 26 (WUJI) or 28 (Sharpa).')
         if (self.observation_horizon, self.action_horizon, self.prediction_horizon) != (2, 16, 8):
-            raise ValueError('Paper horizons are observation=2, action=16, prediction=8.')
+            raise ValueError('Required horizons are observation=2, action=16, prediction=8.')
         for name in ('proprio_dim', 'num_views', 'vector_channels', 'vector_layers',
                      'vector_heads', 'model_dim', 'action_layers', 'action_heads',
                      'train_diffusion_steps', 'inference_steps'):

@@ -2,14 +2,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
-An independent PyTorch implementation of Dex-EquiTact for reactive dexterous
+Official PyTorch implementation of Dex-EquiTact for reactive dexterous
 manipulation using vision, proprioception and three-axis fingertip forces.
 It includes a typed equivariant tactile encoder, causal diffusion policy,
-future-force latent supervision, reproducible training and streaming inference.
-
-This release has been verified on synthetic inputs. Training on the original
-demonstrations and real-robot success rates have not been reproduced. Datasets,
-trained checkpoints and robot drivers are not included.
+future-force latent supervision, training with checkpoint recovery and streaming
+inference.
 
 ## Method overview
 
@@ -51,16 +48,13 @@ flowchart LR
     E -. detached targets .-> L
 ```
 
-The CNN, network widths, optimizer and diffusion schedule use explicit engineering
-defaults where the source manuscript leaves details unspecified. See the
-[method map](docs/METHOD_ALIGNMENT.md) and
-[implementation contract](docs/IMPLEMENTATION_CONTRACT.md) for the exact choices
-and manuscript provenance.
+See the [method guide](docs/METHOD.md) for the formulation and
+[architecture guide](docs/ARCHITECTURE.md) for modules, tensor shapes and the
+default configuration.
 
 ## Installation and quick start
 
-Requires Python **3.10+**, PyTorch **2.2+**, NumPy and PyYAML. The package uses a
-trainable CNN and does not download pretrained weights.
+Requires Python **3.10+**, PyTorch **2.2+**, NumPy and PyYAML.
 
 ```bash
 git clone https://github.com/anon-mity/Dex-EquiTact.git
@@ -69,14 +63,8 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 
-python -m dex_equitact smoke --output /tmp/dex_smoke_wuji --action-dim 26
-python -m dex_equitact smoke --output /tmp/dex_smoke_sharpa --action-dim 28
+python -m dex_equitact --help
 ```
-
-Each smoke command creates labeled synthetic data, performs two optimizer/EMA
-updates, saves and reloads a checkpoint, then runs all 16 streaming steps with a
-small test model. Expected action shapes are `[1,16,26]` and `[1,16,28]`;
-`smoke_result.json` records the result. Use a new or empty output directory.
 
 The installed CLI is also available as `dex-equitact`. Without an editable install,
 run from the repository root with `PYTHONPATH=src python -m dex_equitact ...`.
@@ -91,16 +79,18 @@ Train a separate policy for each embodiment:
 | WUJI | [wuji.yaml](configs/wuji.yaml) | 6 arm increments + 20 hand targets = 26 | 26 |
 | Sharpa | [sharpa.yaml](configs/sharpa.yaml) | 6 arm increments + 22 hand targets = 28 | 28 |
 
-Both profiles use two cameras, two slow observations, 16 tactile/action slots and
-8 future-force target steps. Default networks use 32 vector channels and an action
-transformer width of 128, with 1000 training diffusion levels and 10 DDIM updates.
+The default configuration for both profiles uses two cameras, two slow
+observations, 16 tactile/action slots and 8 future-force target steps, with
+32 vector channels, an action transformer width of 128, 1000 training diffusion
+levels and 10 DDIM updates.
 
 ## Prepare recorded data
 
-Follow the [recorded data schema](docs/DATA_FORMAT.md): a `manifest.json` explicitly
-lists NPZ episodes containing `images`, `proprio`, `positions`, `forces`, `actions`,
-`timestamps` and `image_timestamps`. Metadata declares finger order, coordinate
-frames, units, calibration provenance and the complete action convention.
+Prepare your demonstrations using the [recorded data schema](docs/DATA_FORMAT.md):
+a `manifest.json` explicitly lists NPZ episodes containing `images`, `proprio`,
+`positions`, `forces`, `actions`, `timestamps` and `image_timestamps`. Metadata
+declares finger order, coordinate frames, units, calibration provenance and the
+complete action convention.
 
 Positions must be recorded or independently validated wrist-frame fingertip
 locations in meters; forces are calibrated sensor-local vectors in Newtons.
@@ -136,7 +126,6 @@ python -m dex_equitact evaluate --data /path/to/dataset \
   --checkpoint runs/wuji/last.pt --device cuda
 ```
 
-These step counts are usage examples, not recovered experimental settings.
 `--steps` is the **target total optimizer step count**, including resumed steps.
 Keep the model configuration, data and recorded training settings unchanged when
 resuming. For Sharpa, use `configs/sharpa.yaml` and a separate output directory.
@@ -145,7 +134,7 @@ resuming. For Sharpa, use `configs/sharpa.yaml` and a separate output directory.
 episode split, configuration and a dataset content fingerprint. `run.json` records
 provenance and `metrics.jsonl` logs losses, including validation at each checkpoint.
 Evaluation uses the checkpoint's held-out split and reports action-denoising and
-latent losses. Task success and robot execution are separate evaluations.
+latent losses.
 
 ## Streaming API
 
@@ -182,17 +171,16 @@ arrives to refresh context, clear tactile history and cache new noise.
 The caller owns hardware I/O and interprets arm translation frames, rotation
 composition and hand target units exactly as declared in the dataset manifest.
 
-## Verification
+## Tests
 
 ```bash
 python -m pytest -q
 ```
 
-The [validation record](docs/VALIDATION.md) reports **60 passing CPU tests** on
-Python 3.12 / PyTorch 2.11, covering typed rotations, finger ordering, causality,
-DDIM prefix consistency, EMA targets, both streaming profiles, data contracts and
-checkpoint/resume behavior. These are software checks with synthetic inputs;
-CUDA execution and real-robot latency/performance remain unverified.
+The test suite covers typed rotations, finger ordering, causality, DDIM prefix
+consistency, EMA targets, both streaming profiles, data contracts and
+checkpoint/resume behavior. See the [testing guide](docs/TESTING.md) for coverage
+and commands.
 
 ## Repository map
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Convert an already calibrated replay group; never infer missing signals.
+"""Convert calibrated replay groups to the Dex-EquiTact episode format.
 
-The optional Zarr dependency is imported only by the CLI. The conversion core
-accepts an array group and is independently tested with small NumPy arrays.
+The optional Zarr dependency is imported by the CLI. The conversion core accepts
+an array group, preserves episode boundaries, and validates the recorded fields.
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def convert_replay_group(source, output, metadata, *, image_keys=("oak_rgb", "re
     required = list(image_keys) + list(proprio_keys) + [timestamp_key, image_timestamps_key, positions_key, forces_key, actions_key]
     for key in required:
         if key not in data:
-            raise ValueError(f"Source missing {key}; measured timestamps, geometry, and commands cannot be fabricated")
+            raise ValueError(f"Source missing required recorded field: {key}")
     if len(image_keys) != metadata["num_cameras"] or not proprio_keys:
         raise ValueError("Image/proprio source key counts do not match the declared contract")
     ends = np.asarray(source["meta"]["episode_ends"][:])

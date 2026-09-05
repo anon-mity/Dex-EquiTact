@@ -1,9 +1,8 @@
-"""Causal vector-neuron building blocks using PyTorch only.
+"""Causal vector-neuron layers for ordered fingertip representations.
 
-The paper fixes equivariance, causality and ordered fingers, but not these
-layer details. This implementation chooses scalar gated vector MLPs, vector
-RMS normalization, and learned scalar relative-time / finger-pair attention
-biases. Learned maps never mix XYZ coordinates or add fixed spatial vectors.
+Scalar-gated vector MLPs, vector RMS normalization, and learned scalar
+relative-time/finger-pair attention biases preserve the SO(3) transformation law.
+Channel maps share weights across XYZ coordinates and have no vector bias.
 """
 
 from __future__ import annotations

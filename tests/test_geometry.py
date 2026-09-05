@@ -11,7 +11,7 @@ def geometry_classes():
         vn = importlib.import_module("dex_equitact.models.vn")
         tactile = importlib.import_module("dex_equitact.models.tactile")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Required geometry implementation is absent: {exc}")
+        pytest.fail(f"Cannot import the geometry modules: {exc}")
     return vn.CausalVNEncoder, tactile.TypedTactileEncoder, tactile.ScalarFiLM, tactile.FutureForcePredictor
 
 

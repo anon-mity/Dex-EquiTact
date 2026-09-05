@@ -12,7 +12,7 @@ def _diffusion():
     try:
         return import_module("dex_equitact.models.diffusion")
     except ModuleNotFoundError:
-        pytest.fail("The paper-aligned diffusion module has not been implemented.")
+        pytest.fail("Cannot import dex_equitact.models.diffusion.")
 
 
 def _example(action_dim=26, length=5):

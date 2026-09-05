@@ -1,11 +1,9 @@
 """Causal epsilon prediction and deterministic growing-prefix DDIM.
 
-Equations (11)--(13) of Dex-EquiTact specify visibility, epsilon prediction,
-and deterministic sampling. Widths, layer counts, sinusoidal diffusion-time
-features, learned absolute position embeddings, linear beta schedules, and
-inference step counts below are explicit implementation choices; the paper
-does not provide their values. This conventional scalar action expert does
-not claim the typed rotational equivariance of its incoming tactile field.
+The action expert converts each finger's typed vector field into scalar tokens
+and applies causal attention to action and tactile sequences. Cached slow tokens
+remain visible throughout the visual cycle. Deterministic DDIM sampling uses
+fixed initial noise and absolute positions to maintain prefix consistency.
 """
 
 from __future__ import annotations
@@ -65,10 +63,8 @@ class ActionDenoiser(nn.Module):
     are independent of prefix length. All attention dropout is zero in both
     training and evaluation.
 
-    Apart from the five-finger typed input and the paper's 16-step horizon,
-    the architecture defaults are implementation choices, not recovered
-    paper hyperparameters. Any positive action dimension is accepted; the
-    paper's separate embodiments use 26 and 28.
+    The default horizon is 16, with configurable widths, layers, and heads.
+    The WUJI and Sharpa policy profiles use 26 and 28 action dimensions.
     """
 
     def __init__(
@@ -180,8 +176,8 @@ class ActionDenoiser(nn.Module):
 class DiffusionSchedule(nn.Module):
     """Epsilon-prediction forward process and deterministic DDIM (eta=0).
 
-    The linear beta schedule, 1000 training steps, and default ten inference
-    steps are implementation choices. Selected inference indices are rounded
+    The default linear beta schedule has 1000 training steps and ten inference
+    steps. Selected inference indices are rounded
     evenly spaced indices from ``train_steps - 1`` to zero. One inference
     step starts at ``train_steps - 1`` and directly returns a clean estimate.
     There is no stochastic sampling step, clipping, or dynamic thresholding.

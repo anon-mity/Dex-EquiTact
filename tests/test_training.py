@@ -2,15 +2,16 @@ from pathlib import Path
 
 import torch
 
-from dex_equitact.synthetic import create_synthetic_dataset
 from dex_equitact.training import train, load_policy
+from test_data import make_root
 from test_policy import tiny_config
 
 
 def test_checkpoint_roundtrip_and_exact_cpu_resume(tmp_path):
     data = tmp_path / 'data'
-    create_synthetic_dataset(data, frames=42, episodes=3)
     c = tiny_config()
+    data.mkdir()
+    make_root(data, n_episodes=3, proprio_dim=c.proprio_dim, image_size=16)
     full = train(data, tmp_path / 'full', c, steps=2, batch_size=1, seed=21)
     part = train(data, tmp_path / 'part', c, steps=1, batch_size=1, seed=21)
     resumed = train(data, tmp_path / 'part', c, steps=2, batch_size=1, seed=21, resume=part)
